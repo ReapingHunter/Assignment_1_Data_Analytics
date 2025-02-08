@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from scipy.spatial import distance
+from scipy.spatial.distance import mahalanobis
 from scipy.stats import wilcoxon
 import matplotlib.pyplot as plt
 
@@ -42,8 +42,7 @@ not_treated = df[df['treatment_time'].isna()].copy()
 
 # Compute Mahalanobis distance for matching
 def mahalanobis_distance(x, y, cov_inv):
-    delta = x - y
-    return np.sqrt(np.dot(np.dot(delta, cov_inv), delta.T))
+    return mahalanobis(x, y, cov_inv)
 
 cov_cols = ['pain_baseline', 'urgency_baseline', 'frequency_baseline',
             'pain_treatment', 'urgency_treatment', 'frequency_treatment']

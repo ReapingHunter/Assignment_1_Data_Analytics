@@ -4,11 +4,21 @@ from scipy.spatial import distance
 from scipy.stats import wilcoxon
 import matplotlib.pyplot as plt
 
-# Generate synthetic data
-np.random.seed(24)
+# Set random seed for reproducibility
+np.random.seed(28)
+
+# Constants
 n_patients = 400
-data = {
-    'patient_id': np.arange(0, n_patients),
+BOX_TITLES = [
+    'Baseline', 'At Treatment', '3 Months after Treatment', 
+    '6 Months after Treatment', 'Difference (3 mos posttreatment)', 
+    'Difference (6 mos posttreatment)'
+]
+BOX_LABELS = ['Never/Later Treated', 'Treated']
+
+# Generate synthetic data
+df = pd.DataFrame({
+    'patient_id': np.arange(n_patients),
     'gender': np.random.choice(['M', 'F'], n_patients),
     'treatment_time': np.random.choice([6, 9, 12, np.nan], n_patients),
     'pain_baseline': np.random.randint(0, 10, n_patients),
@@ -17,19 +27,24 @@ data = {
     'pain_treatment': np.random.randint(0, 10, n_patients),
     'urgency_treatment': np.random.randint(0, 10, n_patients),
     'frequency_treatment': np.random.randint(0, 20, n_patients),
-    'outcome': np.random.normal(0, 1, n_patients)
-}
-df = pd.DataFrame(data)
+    'pain_3m': np.random.randint(0, 10, n_patients),
+    'urgency_3m': np.random.randint(0, 10, n_patients),
+    'frequency_3m': np.random.randint(0, 20, n_patients),
+    'pain_6m': np.random.randint(0, 10, n_patients),
+    'urgency_6m': np.random.randint(0, 10, n_patients),
+    'frequency_6m': np.random.randint(0, 20, n_patients),
+    'outcome': np.random.normal(0, 1, n_patients),
+})
 
-# Split into treated and control
+# Split into treated and not treated
 treated = df[df['treatment_time'].notna()].copy()
 not_treated = df[df['treatment_time'].isna()].copy()
 
+# Compute Mahalanobis distance for matching
 def mahalanobis_distance(x, y, cov_inv):
     delta = x - y
     return np.sqrt(np.dot(np.dot(delta, cov_inv), delta.T))
 
-# Compute covariance matrix inverse for the covariates
 cov_cols = ['pain_baseline', 'urgency_baseline', 'frequency_baseline',
             'pain_treatment', 'urgency_treatment', 'frequency_treatment']
 cov_matrix = df[cov_cols].cov().values
@@ -40,18 +55,15 @@ matched_pairs = []
 used_controls = set()
 
 for idx, treated_patient in treated.iterrows():
-    tm = treated_patient['treatment_time']
     eligible_controls = not_treated[~not_treated.index.isin(used_controls)]
-    
-    # Calculate distances
     distances = []
+    
     for c_idx, control_patient in eligible_controls.iterrows():
         x = treated_patient[cov_cols].values
         y = control_patient[cov_cols].values
         d = mahalanobis_distance(x, y, cov_inv)
         distances.append((c_idx, d))
     
-    # Find closest control
     if distances:
         distances.sort(key=lambda x: x[1])
         closest = distances[0]
@@ -62,30 +74,67 @@ for idx, treated_patient in treated.iterrows():
 matched_treated = treated[treated['patient_id'].isin([p[0] for p in matched_pairs])]
 matched_not_treated = not_treated.loc[[p[1] for p in matched_pairs]]
 
-# Check balance before and after matching
-def check_balance(col, treated_df, not_treated_df, time):
-    plt.figure()
-    plt.boxplot([not_treated_df[col], treated_df[col]], labels=['Never/Later Treated', 'Treated'])
-    plt.title(f'Balance check for {col} {time}')
+# Compute differences for each matched pair
+matched_treated["pain_diff_3m"] = matched_treated["pain_3m"] - matched_treated["pain_baseline"]
+matched_treated["pain_diff_6m"] = matched_treated["pain_6m"] - matched_treated["pain_baseline"]
+matched_not_treated["pain_diff_3m"] = matched_not_treated["pain_3m"] - matched_not_treated["pain_baseline"]
+matched_not_treated["pain_diff_6m"] = matched_not_treated["pain_6m"] - matched_not_treated["pain_baseline"]
+
+matched_treated["urgency_diff_3m"] = matched_treated["urgency_3m"] - matched_treated["urgency_baseline"]
+matched_treated["urgency_diff_6m"] = matched_treated["urgency_6m"] - matched_treated["urgency_baseline"]
+matched_not_treated["urgency_diff_3m"] = matched_not_treated["urgency_3m"] - matched_not_treated["urgency_baseline"]
+matched_not_treated["urgency_diff_6m"] = matched_not_treated["urgency_6m"] - matched_not_treated["urgency_baseline"]
+
+matched_treated["frequency_diff_3m"] = matched_treated["frequency_3m"] - matched_treated["frequency_baseline"]
+matched_treated["frequency_diff_6m"] = matched_treated["frequency_6m"] - matched_treated["frequency_baseline"]
+matched_not_treated["frequency_diff_3m"] = matched_not_treated["frequency_3m"] - matched_not_treated["frequency_baseline"]
+matched_not_treated["frequency_diff_6m"] = matched_not_treated["frequency_6m"] - matched_not_treated["frequency_baseline"]
+
+# Function to create a combined figure with 6 box plots
+def plot_combined_boxplots(data_treated, data_not_treated, measure_names, title, label):
+    fig, axes = plt.subplots(3, 2, figsize=(10, 12))
+    fig.suptitle(title, fontsize=16)
+    
+    for i, measure in enumerate(measure_names):
+        row, col = divmod(i, 2)
+        axes[row, col].boxplot([data_not_treated[measure], data_treated[measure]], labels=BOX_LABELS)
+        axes[row, col].set_title(BOX_TITLES[i])
+        axes[row, col].set_ylabel(label)
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.92)
     plt.show()
 
-for col in cov_cols:
-    check_balance(col, treated, not_treated, "(Before)")
-    check_balance(col, matched_treated, matched_not_treated, "(After)")
+# Generate combined boxplots for Pain, Urgency, and Frequency
+plot_combined_boxplots(
+    matched_treated, matched_not_treated, 
+    ['pain_baseline', 'pain_treatment', 'pain_3m', 'pain_6m', 'pain_diff_3m', 'pain_diff_6m'], 
+    "Pain Score", "Pain Score"
+)
 
-    # Extract outcomes for matched pairs
+plot_combined_boxplots(
+    matched_treated, matched_not_treated, 
+    ['urgency_baseline', 'urgency_treatment', 'urgency_3m', 'urgency_6m', 'urgency_diff_3m', 'urgency_diff_6m'], 
+    "Urgency Score", "Urgency"
+)
+
+plot_combined_boxplots(
+    matched_treated, matched_not_treated, 
+    ['frequency_baseline', 'frequency_treatment', 'frequency_3m', 'frequency_6m', 'frequency_diff_3m', 'frequency_diff_6m'], 
+    "Frequency Score", "Nocturnal Frequency"
+)
+
+# Wilcoxon test
 treated_outcomes = matched_treated['outcome'].values
 not_treated_outcomes = matched_not_treated['outcome'].values
-
-# Perform Wilcoxon test
 stat, p_value = wilcoxon(treated_outcomes, not_treated_outcomes)
 print(f"Wilcoxon signed-rank test: statistic={stat}, p-value={p_value:.4f}")
 
+# Sensitivity Analysis
 def sensitivity_analysis(pairs, gamma_values):
     original_p = wilcoxon(treated_outcomes, not_treated_outcomes).pvalue
     p_values = [original_p]
     for gamma in gamma_values:
-        # Adjust p-value bounds based on gamma (simplified)
         upper_p = original_p * gamma
         lower_p = original_p / gamma
         p_values.append((lower_p, upper_p))

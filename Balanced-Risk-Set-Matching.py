@@ -20,7 +20,7 @@ BOX_LABELS = ['Never/Later Treated', 'Treated']
 df = pd.DataFrame({
     'patient_id': np.arange(n_patients),
     'gender': np.random.choice(['M', 'F'], n_patients),
-    'treatment_time': np.random.choice([6, 9, 12, np.nan], n_patients),
+    'treatment_time': np.random.choice([3, 6, 9, np.nan], n_patients),
     'pain_baseline': np.random.randint(0, 10, n_patients),
     'urgency_baseline': np.random.randint(0, 10, n_patients),
     'frequency_baseline': np.random.randint(0, 20, n_patients),

@@ -91,7 +91,7 @@ matched_not_treated["frequency_diff_6m"] = matched_not_treated["frequency_6m"] -
 
 # Function to create a combined figure with 6 box plots
 def plot_combined_boxplots(data_treated, data_not_treated, measure_names, title, label):
-    fig, axes = plt.subplots(3, 2, figsize=(10, 12))
+    fig, axes = plt.subplots(3, 2, figsize=(7, 8))
     fig.suptitle(title, fontsize=16)
     
     for i, measure in enumerate(measure_names):
